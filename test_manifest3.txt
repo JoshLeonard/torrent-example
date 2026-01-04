@@ -1,0 +1,8 @@
+music_album.zip
+524288000
+deadbeef1234567890abcdef12345678
+application/zip
+zip
+Complete music album archive with MP3 files
+172.16.0.1,172.16.0.2
+
