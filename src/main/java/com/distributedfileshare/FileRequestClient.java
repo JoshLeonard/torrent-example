@@ -4,6 +4,7 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 
 public class FileRequestClient {
     private Socket clientSocket;
@@ -22,6 +23,7 @@ public class FileRequestClient {
 
     public void requestFile(String fileHash) {
         try {
+            outputStream.write(ByteBuffer.allocate(4).putInt(1).array());
             outputStream.write(fileHash.getBytes());
             outputStream.flush();
         } catch (IOException e) {

@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.*;
 
 import com.distributedfileshare.Models.ServerState;
@@ -13,8 +15,7 @@ public class FileServer implements AutoCloseable {
     private ServerSocket serverSocket;
     private ExecutorService executorService;
     private static final int TIMEOUT = 10000;
-    private static final int BUFFER_SIZE = 1024;
-    private ServerState serverState = ServerState.Stopped;
+    private volatile ServerState serverState = ServerState.Stopped;
 
     public FileServer() {
         executorService = Executors.newVirtualThreadPerTaskExecutor();
@@ -60,11 +61,42 @@ public class FileServer implements AutoCloseable {
     }
 
     private void waitForRequest(BufferedInputStream inputStream) throws IOException {
-        byte[] request = new byte[BUFFER_SIZE];
-        int bytesRead = inputStream.read(request);
-        String fileHash = new String(request, 0, bytesRead);
+        int requestSizeSize = 4;
+        
+        int versionSize = 4;
+        byte[] versionBytes = new byte[versionSize];
+        readFully(inputStream, versionBytes);
+        int version = ByteBuffer.wrap(versionBytes).getInt();
+        if (version != 1) {
+            throw new IOException("Unsupported version: " + version);
+        }
+
+        byte[] requestSizeBytes = new byte[requestSizeSize];
+        readFully(inputStream, requestSizeBytes);
+        int requestSize = ByteBuffer.wrap(requestSizeBytes).getInt();
+        if (requestSize <= -1) {
+            throw new IOException("Request size is -1, indicating no request");
+        }
+        if (requestSize > 1024 * 1024) {
+            throw new IOException("Request size is too large: " + requestSize);
+        }
+
+        byte[] request = new byte[requestSize];
+        readFully(inputStream, request);
+        String fileHash = new String(request, 0, request.length, StandardCharsets.UTF_8);
 
         System.out.println("Received request for file with hash: " + fileHash);
+    }
+
+    private void readFully(BufferedInputStream inputStream, byte[] buffer) throws IOException {
+        int totalRead = 0;
+        while (totalRead < buffer.length) {
+            int bytesRead = inputStream.read(buffer, totalRead, buffer.length - totalRead);
+            if (bytesRead == -1) {
+                throw new IOException("EOF reached");
+            }
+            totalRead += bytesRead;
+        }
     }
 
     private void sendData(byte[] data, Socket clientSocket) throws IOException {
